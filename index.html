@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猜数字 (Global Minimax) 破解器</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .info-box {
+            background-color: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #3b82f6;
+        }
+
+        .game-area {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .current-guess {
+            font-size: 3rem;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            color: var(--text);
+        }
+
+        .status-text {
+            color: #64748b;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .btn-reset {
+            background-color: #ef4444;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .log-area {
+            margin-top: 30px;
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+
+        .log-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-family: monospace;
+        }
+        
+        .log-entry span:first-child {
+            font-weight: bold;
+        }
+
+        .loading {
+            display: none;
+            color: var(--primary);
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 480px) {
+            .current-guess {
+                font-size: 2.5rem;
+            }
+            .container {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>猜数字 AI 助手</h1>
+    
+    <div class="info-box">
+        <strong>策略说明：</strong><br>
+        1. AI 可能会建议一个【绝对错误】的数字用于排除。<br>
+        2. 目标是极小化剩余可能性的最大值 (Minimax)。<br>
+        3. 规则：位置和数值都对才算分 (0-4)。
+    </div>
+
+    <div class="game-area">
+        <div id="step-indicator">准备就绪</div>
+        <div class="current-guess" id="guess-display">----</div>
+        <div class="status-text" id="status-text">点击下方“开始”按钮启动</div>
+        <div class="loading" id="loading">正在进行博弈推演...</div>
+
+        <div id="action-area">
+            <button onclick="startGame()" style="width: 100%">开始破解</button>
+        </div>
+    </div>
+
+    <div class="log-area">
+        <h3>推演日志</h3>
+        <div id="log-list"></div>
+    </div>
+</div>
+
+<script>
+    // === 核心逻辑类 (移植自 Python GameTheorySolver) ===
+    class GameTheorySolver {
+        constructor() {
+            this.allCombinations = [];
+            this.candidates = [];
+            this.turn = 0;
+            this.initSpace();
+        }
+
+        initSpace() {
+            // 初始化 0000-9999
+            this.allCombinations = [];
+            for (let i = 0; i < 10000; i++) {
+                this.allCombinations.push(i.toString().padStart(4, '0'));
+            }
+            this.candidates = [...this.allCombinations];
+            this.turn = 0;
+        }
+
+        calculateScore(target, guess) {
+            let score = 0;
+            for (let i = 0; i < 4; i++) {
+                if (target[i] === guess[i]) {
+                    score++;
+                }
+            }
+            return score;
+        }
+
+        // 异步方法以免阻塞 UI
+        async getBestGuess() {
+            return new Promise((resolve) => {
+                // 使用 setTimeout 让 UI 有机会渲染 "Loading"
+                setTimeout(() => {
+                    this.turn += 1;
+
+                    // === 阶段 1: 开局定式 ===
+                    if (this.turn === 1) {
+                        resolve("0123");
+                        return;
+                    }
+
+                    // 如果只剩 1-2 个，直接猜
+                    if (this.candidates.length <= 2) {
+                        resolve(this.candidates[0]);
+                        return;
+                    }
+
+                    // === 阶段 2: 性能分层策略 ===
+                    let searchSpace;
+                    
+                    // 策略 A: 剩余项太多，使用强力覆盖或局部搜索
+                    if (this.candidates.length > 500) {
+                        if (this.turn === 2) { resolve("4567"); return; }
+                        if (this.turn === 3) { resolve("8901"); return; }
+                        searchSpace = this.candidates;
+                    } else {
+                        // 策略 B: 终极博弈 (Global Minimax)
+                        // 遍历全量空间寻找最佳切割刀
+                        searchSpace = this.allCombinations;
+                    }
+
+                    let bestGuess = this.candidates[0];
+                    let minWorstCase = Infinity;
+
+                    // 遍历搜索空间
+                    for (let i = 0; i < searchSpace.length; i++) {
+                        const guess = searchSpace[i];
+                        
+                        // 统计分数分布
+                        // scoreCounts 索引代表分数 (0,1,2,3,4)
+                        const scoreCounts = [0, 0, 0, 0, 0];
+
+                        for (let j = 0; j < this.candidates.length; j++) {
+                            const cand = this.candidates[j];
+                            const score = this.calculateScore(cand, guess);
+                            scoreCounts[score]++;
+                        }
+
+                        // Minimax 核心：找出最坏情况
+                        let worstCase = 0;
+                        for(let c of scoreCounts) {
+                            if(c > worstCase) worstCase = c;
+                        }
+
+                        if (worstCase < minWorstCase) {
+                            minWorstCase = worstCase;
+                            bestGuess = guess;
+                        } else if (worstCase === minWorstCase) {
+                            // 如果最坏情况一样，优先选择可能是答案的数字
+                            if (this.candidates.includes(guess)) {
+                                bestGuess = guess;
+                            }
+                        }
+
+                        // 剪枝：如果最坏情况是1，已经是完美区分
+                        if (minWorstCase === 1) break;
+                    }
+
+                    resolve(bestGuess);
+                }, 50);
+            });
+        }
+
+        update(guess, realScore) {
+            const before = this.candidates.length;
+            this.candidates = this.candidates.filter(c => this.calculateScore(c, guess) === realScore);
+            const after = this.candidates.length;
+            return { before, after };
+        }
+    }
+
+    // === UI 交互逻辑 ===
+    let solver = null;
+    let currentGuess = "";
+
+    const ui = {
+        step: document.getElementById('step-indicator'),
+        guess: document.getElementById('guess-display'),
+        status: document.getElementById('status-text'),
+        actionArea: document.getElementById('action-area'),
+        logList: document.getElementById('log-list'),
+        loading: document.getElementById('loading')
+    };
+
+    function startGame() {
+        solver = new GameTheorySolver();
+        ui.logList.innerHTML = '';
+        nextTurn();
+    }
+
+    async function nextTurn() {
+        setLoading(true);
+        ui.status.innerText = `剩余可能性: ${solver.candidates.length}`;
+        
+        // 获取建议
+        currentGuess = await solver.getBestGuess();
+        
+        ui.step.innerText = `第 ${solver.turn} 轮`;
+        ui.guess.innerText = currentGuess;
+        
+        setLoading(false);
+        showScoreButtons();
+    }
+
+    function showScoreButtons() {
+        let html = `
+            <div style="grid-column: 1 / -1; margin-bottom: 5px; font-size: 0.9rem;">
+                设定者反馈几对 (位置数值全对)?
+            </div>
+            <div class="controls">
+                <button onclick="handleScore(0)">0</button>
+                <button onclick="handleScore(1)">1</button>
+                <button onclick="handleScore(2)">2</button>
+                <button onclick="handleScore(3)">3</button>
+                <button onclick="handleScore(4)">4</button>
+            </div>
+            <button class="btn-reset" onclick="location.reload()">重置游戏</button>
+        `;
+        ui.actionArea.innerHTML = html;
+    }
+
+    function handleScore(score) {
+        if (score === 4) {
+            gameWin();
+            return;
+        }
+
+        const result = solver.update(currentGuess, score);
+        
+        // 记录日志
+        addLog(solver.turn, currentGuess, score, result.before, result.after);
+
+        if (result.after === 0) {
+            ui.status.innerText = "异常：剩余可能性为0，请检查刚才的反馈输入是否正确。";
+            ui.status.style.color = "red";
+            ui.actionArea.innerHTML = '<button class="btn-reset" onclick="location.reload()">重置</button>';
+            return;
+        }
+
+        nextTurn();
+    }
+
+    function gameWin() {
+        ui.status.innerText = "破解成功！";
+        ui.status.style.color = "green";
+        ui.actionArea.innerHTML = `
+            <div style="color: green; font-weight: bold; margin-bottom: 20px;">
+                答案是 ${currentGuess}，共耗时 ${solver.turn} 轮。
+            </div>
+            <button class="btn-reset" onclick="startGame()">再来一局</button>
+        `;
+        addLog(solver.turn, currentGuess, 4, 1, 1);
+    }
+
+    function addLog(step, guess, score, before, after) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = `
+            <span>#${step} 猜 ${guess}</span>
+            <span>反馈:${score} | 排除:${before-after} | 剩:${after}</span>
+        `;
+        ui.logList.prepend(div);
+    }
+
+    function setLoading(isLoading) {
+        ui.loading.style.display = isLoading ? 'block' : 'none';
+        if (isLoading) {
+            ui.actionArea.style.opacity = '0.5';
+            ui.actionArea.style.pointerEvents = 'none';
+        } else {
+            ui.actionArea.style.opacity = '1';
+            ui.actionArea.style.pointerEvents = 'auto';
+        }
+    }
+</script>
+
+</body>
+</html>
