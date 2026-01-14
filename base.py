@@ -2,6 +2,23 @@ import itertools
 from collections import defaultdict
 import time
 import sys
+import random
+
+
+boundary_pool = ['0', '1', '8', '9']
+middle_pool   = ['2', '3', '4', '5', '6', '7']
+
+def remove_digits_from_pools(s: str,
+                             boundary_pool: list[str],
+                             middle_pool: list[str]) -> tuple[list[str], list[str]]:
+    # 从字符串中提取所有数字字符
+    digits_in_s = set(ch for ch in s if ch.isdigit())
+
+    # 过滤两个列表：只保留没出现在字符串中的数字
+    new_boundary = [d for d in boundary_pool if d not in digits_in_s]
+    new_middle   = [d for d in middle_pool   if d not in digits_in_s]
+
+    return new_boundary, new_middle
 
 class GameTheorySolver:
     def __init__(self):
@@ -15,6 +32,37 @@ class GameTheorySolver:
     def calculate_score(self, target, guess):
         """位置和数值都对才算对"""
         return sum(1 for t, g in zip(target, guess) if t == g)
+    
+    def get_balanced_opening(self):
+        """生成均衡探测数 (确保无重复数字，且混合边界和中间数)"""
+        boundary_pool = ['0', '1', '8', '9']
+        middle_pool   = ['2', '3', '4', '5', '6', '7']
+        
+        p1 = random.sample(boundary_pool, 2)
+        p2 = random.sample(middle_pool, 2)
+        
+        selection = p1 + p2
+        random.shuffle(selection)
+        return "".join(selection)
+    
+    def get_balanced_opening_turn2(self):
+        """生成均衡探测数 (确保无重复数字，且混合边界和中间数)"""
+        boundary_pool = ['0', '1', '8', '9']
+        middle_pool   = ['2', '3', '4', '5', '6', '7']
+
+        # 从字符串中提取所有数字字符
+        digits_in_s = set(ch for ch in self.turn_1 if ch.isdigit())
+
+        # 过滤两个列表：只保留没出现在字符串中的数字
+        new_boundary = [d for d in boundary_pool if d not in digits_in_s]
+        new_middle   = [d for d in middle_pool   if d not in digits_in_s]
+        
+        p1 = random.sample(boundary_pool, 2)
+        p2 = random.sample(middle_pool, 2)
+        
+        selection = p1 + p2
+        random.shuffle(selection)
+        return "".join(selection)
 
     def get_best_guess(self):
         self.turn += 1
@@ -22,21 +70,22 @@ class GameTheorySolver:
         # === 阶段 1: 开局定式 (为了秒回) ===
         # 0123 是信息熵最高的开局
         if self.turn == 1:
-            return "0123"
+            self.turn_1 = self.get_balanced_opening()
+            return self.turn_1
+        if self.turn == 2:
+            return self.get_balanced_opening_turn2()
 
         # 如果只剩 1-2 个，直接猜，不用算博弈了
         if len(self.candidates) <= 2:
             return self.candidates[0]
 
-        print(f"   [分析] 剩余 {len(self.candidates)} 个嫌疑项。正在寻找最佳探测数...")
+        print(f"   [博弈分析] 剩余 {len(self.candidates)} 个嫌疑项。正在寻找最佳探测数...")
 
         # === 阶段 2: 性能分层策略 ===
         
         # 策略 A: 如果剩余项太多 (>500)，全局搜索太慢。
         # 使用“强力覆盖”策略，强制探测未涉及的数字区间。
         if len(self.candidates) > 500:
-            if self.turn == 2: return "4567"
-            if self.turn == 3: return "8901"
             # 如果还没筛完，就从候选池里选一个最能切割的
             search_space = self.candidates
         else:
@@ -101,12 +150,8 @@ class GameTheorySolver:
 
 def main():
     print("========================================")
-    print("      猜数字 (Global Minimax)    ")
+    print("      猜数字 (智能覆盖优化版)    ")
     print("========================================")
-    print("特点：")
-    print("1. 可能会建议你猜一个【绝对错误】的数字。")
-    print("2. 目的不是为了这一把猜中，而是为了下一把必中。")
-    print("========================================\n")
     
     solver = GameTheorySolver()
     step = 0

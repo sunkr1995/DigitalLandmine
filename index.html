@@ -3,388 +3,557 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>猜数字 (Global Minimax) 破解器</title>
+    <title>AI 猜数字破解器 (Game Theory Solver)</title>
     <style>
         :root {
             --primary: #2563eb;
+            --primary-hover: #1d4ed8;
             --bg: #f8fafc;
-            --card: #ffffff;
-            --text: #1e293b;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
             --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             background-color: var(--bg);
-            color: var(--text);
+            color: var(--text-main);
             margin: 0;
             padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
+            line-height: 1.5;
         }
 
         .container {
-            max-width: 600px;
-            width: 100%;
-            background: var(--card);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            color: var(--primary);
+        }
+        .subtitle {
+            color: var(--text-sub);
+            font-size: 0.9rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             padding: 24px;
-            box-sizing: border-box;
-        }
-
-        h1 {
-            margin-top: 0;
-            font-size: 1.5rem;
-            text-align: center;
-            color: var(--primary);
-        }
-
-        .info-box {
-            background-color: #eff6ff;
-            border-left: 4px solid var(--primary);
-            padding: 12px;
             margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-weight: 600;
             font-size: 0.9rem;
-            color: #3b82f6;
+            color: var(--text-sub);
+            background: #f1f5f9;
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+        .highlight {
+            color: var(--primary);
+            font-family: monospace;
+            font-size: 1.1em;
         }
 
-        .game-area {
+        /* Main Interaction Area */
+        .guess-display {
             text-align: center;
-            margin: 30px 0;
+            margin: 20px 0;
         }
-
-        .current-guess {
-            font-size: 3rem;
+        .guess-number {
+            font-family: 'Courier New', monospace;
+            font-size: 3.5rem;
             font-weight: bold;
             letter-spacing: 8px;
+            color: var(--text-main);
+            background: #f8fafc;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 10px 0;
             margin: 10px 0;
-            font-family: monospace;
-            color: var(--text);
+            transition: all 0.3s;
+        }
+        .guess-number.thinking {
+            color: var(--text-sub);
+            font-size: 1.5rem;
+            letter-spacing: normal;
+            border-color: transparent;
+            animation: pulse 1.5s infinite;
         }
 
-        .status-text {
-            color: #64748b;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-        }
-
+        /* Controls */
         .controls {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            text-align: center;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: center;
             gap: 10px;
-            margin-top: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
         }
-
         button {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 1rem;
             cursor: pointer;
-            transition: opacity 0.2s;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s;
         }
-
-        button:hover {
-            opacity: 0.9;
+        .btn-score {
+            background-color: var(--bg);
+            border: 2px solid var(--border);
+            color: var(--text-main);
+            min-width: 50px;
         }
-
-        button:disabled {
-            background-color: #cbd5e1;
-            cursor: not-allowed;
+        .btn-score:hover:not(:disabled) {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: #eff6ff;
         }
-
         .btn-reset {
-            background-color: #ef4444;
+            background-color: var(--text-sub);
+            color: white;
             margin-top: 20px;
             width: 100%;
         }
-
-        .log-area {
-            margin-top: 30px;
-            border-top: 1px solid var(--border);
-            padding-top: 20px;
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
-        .log-entry {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #f1f5f9;
-            font-family: monospace;
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            background-color: #e2e8f0;
+            border-radius: 99px;
+            height: 6px;
+            margin-top: 15px;
+            overflow: hidden;
+            display: none; /* Hidden by default */
         }
-        
-        .log-entry span:first-child {
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary);
+            width: 0%;
+            transition: width 0.1s;
+        }
+        .progress-text {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            margin-top: 5px;
+            min-height: 1.2em;
+        }
+
+        /* History Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            color: var(--text-sub);
+            font-weight: 600;
+        }
+        .col-step { width: 15%; }
+        .col-guess { width: 30%; font-family: monospace; font-weight: bold; }
+        .col-score { width: 20%; }
+        .col-remain { width: 35%; text-align: right; }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .success-message {
+            color: var(--success);
             font-weight: bold;
-        }
-
-        .loading {
+            text-align: center;
+            font-size: 1.2rem;
             display: none;
-            color: var(--primary);
-            font-weight: bold;
-            margin-top: 10px;
         }
-
-        /* 移动端适配 */
-        @media (max-width: 480px) {
-            .current-guess {
-                font-size: 2.5rem;
-            }
-            .container {
-                padding: 16px;
-            }
+        .error-message {
+            color: var(--danger);
+            font-weight: bold;
+            text-align: center;
+            display: none;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>猜数字 AI 助手</h1>
-    
-    <div class="info-box">
-        <strong>策略说明：</strong><br>
-        1. AI 可能会建议一个【绝对错误】的数字用于排除。<br>
-        2. 目标是极小化剩余可能性的最大值 (Minimax)。<br>
-        3. 规则：位置和数值都对才算分 (0-4)。
-    </div>
+    <header>
+        <h1>AI 猜数字破解器</h1>
+        <div class="subtitle">基于博弈论与信息熵的智能破解 (Python Logic Port)</div>
+    </header>
 
-    <div class="game-area">
-        <div id="step-indicator">准备就绪</div>
-        <div class="current-guess" id="guess-display">----</div>
-        <div class="status-text" id="status-text">点击下方“开始”按钮启动</div>
-        <div class="loading" id="loading">正在进行博弈推演...</div>
-
-        <div id="action-area">
-            <button onclick="startGame()" style="width: 100%">开始破解</button>
+    <div class="card">
+        <div class="status-bar">
+            <span>当前轮次: <span id="step-count" class="highlight">0</span></span>
+            <span>剩余可能性: <span id="candidates-count" class="highlight">10000</span></span>
         </div>
+
+        <div class="guess-display">
+            <div style="color: var(--text-sub); font-size: 0.9rem;">AI 建议猜测</div>
+            <div id="guess-output" class="guess-number">----</div>
+            
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-text" id="progress-text"></div>
+        </div>
+
+        <div class="controls" id="game-controls">
+            <p style="margin-bottom: 10px;">设定者反馈：位置和数值都对的数量 (0-4)</p>
+            <div class="btn-group">
+                <button class="btn-score" onclick="handleFeedback(0)">0</button>
+                <button class="btn-score" onclick="handleFeedback(1)">1</button>
+                <button class="btn-score" onclick="handleFeedback(2)">2</button>
+                <button class="btn-score" onclick="handleFeedback(3)">3</button>
+                <button class="btn-score" onclick="handleFeedback(4)">4</button>
+            </div>
+        </div>
+
+        <div id="result-message" class="success-message">🎉 破解成功！</div>
+        <div id="error-message" class="error-message">⚠️ 异常：剩余可能性为0，请检查反馈是否正确。</div>
+
+        <button class="btn-reset" onclick="initGame()">重置游戏</button>
     </div>
 
-    <div class="log-area">
-        <h3>推演日志</h3>
-        <div id="log-list"></div>
+    <div class="card">
+        <h3 style="margin-top: 0;">破解记录</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-step">轮次</th>
+                    <th class="col-guess">猜测数字</th>
+                    <th class="col-score">反馈</th>
+                    <th class="col-remain">剩余嫌疑项</th>
+                </tr>
+            </thead>
+            <tbody id="history-list">
+                <!-- History items will go here -->
+            </tbody>
+        </table>
     </div>
 </div>
 
 <script>
-    // === 核心逻辑类 (移植自 Python GameTheorySolver) ===
+    // ==========================================
+    // Core Logic (Ported from Python)
+    // ==========================================
+
     class GameTheorySolver {
         constructor() {
             this.allCombinations = [];
-            this.candidates = [];
-            this.turn = 0;
-            this.initSpace();
-        }
-
-        initSpace() {
-            // 初始化 0000-9999
-            this.allCombinations = [];
+            // Generate 0000-9999
             for (let i = 0; i < 10000; i++) {
-                this.allCombinations.push(i.toString().padStart(4, '0'));
+                this.allCombinations.push(String(i).padStart(4, '0'));
             }
             this.candidates = [...this.allCombinations];
             this.turn = 0;
+            this.turn1Guess = "";
         }
 
         calculateScore(target, guess) {
             let score = 0;
             for (let i = 0; i < 4; i++) {
-                if (target[i] === guess[i]) {
-                    score++;
-                }
+                if (target[i] === guess[i]) score++;
             }
             return score;
         }
 
-        // 异步方法以免阻塞 UI
-        async getBestGuess() {
-            return new Promise((resolve) => {
-                // 使用 setTimeout 让 UI 有机会渲染 "Loading"
-                setTimeout(() => {
-                    this.turn += 1;
-
-                    // === 阶段 1: 开局定式 ===
-                    if (this.turn === 1) {
-                        resolve("0123");
-                        return;
-                    }
-
-                    // 如果只剩 1-2 个，直接猜
-                    if (this.candidates.length <= 2) {
-                        resolve(this.candidates[0]);
-                        return;
-                    }
-
-                    // === 阶段 2: 性能分层策略 ===
-                    let searchSpace;
-                    
-                    // 策略 A: 剩余项太多，使用强力覆盖或局部搜索
-                    if (this.candidates.length > 500) {
-                        if (this.turn === 2) { resolve("4567"); return; }
-                        if (this.turn === 3) { resolve("8901"); return; }
-                        searchSpace = this.candidates;
-                    } else {
-                        // 策略 B: 终极博弈 (Global Minimax)
-                        // 遍历全量空间寻找最佳切割刀
-                        searchSpace = this.allCombinations;
-                    }
-
-                    let bestGuess = this.candidates[0];
-                    let minWorstCase = Infinity;
-
-                    // 遍历搜索空间
-                    for (let i = 0; i < searchSpace.length; i++) {
-                        const guess = searchSpace[i];
-                        
-                        // 统计分数分布
-                        // scoreCounts 索引代表分数 (0,1,2,3,4)
-                        const scoreCounts = [0, 0, 0, 0, 0];
-
-                        for (let j = 0; j < this.candidates.length; j++) {
-                            const cand = this.candidates[j];
-                            const score = this.calculateScore(cand, guess);
-                            scoreCounts[score]++;
-                        }
-
-                        // Minimax 核心：找出最坏情况
-                        let worstCase = 0;
-                        for(let c of scoreCounts) {
-                            if(c > worstCase) worstCase = c;
-                        }
-
-                        if (worstCase < minWorstCase) {
-                            minWorstCase = worstCase;
-                            bestGuess = guess;
-                        } else if (worstCase === minWorstCase) {
-                            // 如果最坏情况一样，优先选择可能是答案的数字
-                            if (this.candidates.includes(guess)) {
-                                bestGuess = guess;
-                            }
-                        }
-
-                        // 剪枝：如果最坏情况是1，已经是完美区分
-                        if (minWorstCase === 1) break;
-                    }
-
-                    resolve(bestGuess);
-                }, 50);
-            });
+        // Helper: Shuffle array
+        shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
         }
 
-        update(guess, realScore) {
+        // Helper: Sample n elements
+        sample(array, n) {
+            const shuffled = this.shuffle([...array]);
+            return shuffled.slice(0, n);
+        }
+
+        getBalancedOpening() {
+            const boundaryPool = ['0', '1', '8', '9'];
+            const middlePool = ['2', '3', '4', '5', '6', '7'];
+            
+            const p1 = this.sample(boundaryPool, 2);
+            const p2 = this.sample(middlePool, 2);
+            
+            const selection = this.shuffle([...p1, ...p2]);
+            return selection.join("");
+        }
+
+        getBalancedOpeningTurn2() {
+            const boundaryPool = ['0', '1', '8', '9'];
+            const middlePool = ['2', '3', '4', '5', '6', '7'];
+
+            const digitsInS = new Set(this.turn1Guess.split(''));
+
+            const newBoundary = boundaryPool.filter(d => !digitsInS.has(d));
+            const newMiddle = middlePool.filter(d => !digitsInS.has(d));
+
+            // Python logic samples 2 from remaining. 
+            // Note: In theory if Turn 1 used too many from one pool, this might fail if <2 remain.
+            // But with 2+2 split in Turn 1, there are always 2 left in Boundary and 4 in Middle.
+            const p1 = this.sample(newBoundary, 2);
+            const p2 = this.sample(newMiddle, 2);
+
+            const selection = this.shuffle([...p1, ...p2]);
+            return selection.join("");
+        }
+
+        // Async function to allow UI updates during heavy calculation
+        async getBestGuess(progressCallback) {
+            this.turn += 1;
+
+            // Phase 1: Opening
+            if (this.turn === 1) {
+                this.turn1Guess = this.getBalancedOpening();
+                return this.turn1Guess;
+            }
+            if (this.turn === 2) {
+                return this.getBalancedOpeningTurn2();
+            }
+
+            // End Game shortcut
+            if (this.candidates.length <= 2) {
+                return this.candidates[0];
+            }
+
+            // Phase 2: Minimax
+            let searchSpace;
+            if (this.candidates.length > 500) {
+                searchSpace = this.candidates; // Heuristic: only search candidates
+            } else {
+                searchSpace = this.allCombinations; // Global Minimax
+            }
+
+            let bestGuess = this.candidates[0];
+            let minWorstCase = Infinity;
+
+            const totalSearch = searchSpace.length;
+            const checkStep = Math.max(1, Math.floor(totalSearch / 20)); // Update UI every 5%
+
+            // Heavy loop with chunking
+            for (let i = 0; i < totalSearch; i++) {
+                const guess = searchSpace[i];
+
+                // Yield to UI thread occasionally
+                if (i % 200 === 0) {
+                    if (progressCallback) progressCallback(i, totalSearch);
+                    await new Promise(r => setTimeout(r, 0)); 
+                }
+
+                const scoreCounts = {};
+                
+                // Simulate against all current candidates
+                for (const cand of this.candidates) {
+                    const score = this.calculateScore(cand, guess);
+                    scoreCounts[score] = (scoreCounts[score] || 0) + 1;
+                }
+
+                // Find worst case (max remaining candidates)
+                let worstCase = 0;
+                for (const s in scoreCounts) {
+                    if (scoreCounts[s] > worstCase) worstCase = scoreCounts[s];
+                }
+
+                if (worstCase < minWorstCase) {
+                    minWorstCase = worstCase;
+                    bestGuess = guess;
+                } else if (worstCase === minWorstCase) {
+                    // Tie-breaker: prefer guesses that are possible answers
+                    if (this.candidates.includes(guess)) {
+                        bestGuess = guess;
+                    }
+                }
+
+                // Pruning
+                if (minWorstCase === 1) break;
+            }
+
+            return bestGuess;
+        }
+
+        updateCandidates(guess, realScore) {
             const before = this.candidates.length;
             this.candidates = this.candidates.filter(c => this.calculateScore(c, guess) === realScore);
-            const after = this.candidates.length;
-            return { before, after };
+            return this.candidates.length;
         }
     }
 
-    // === UI 交互逻辑 ===
-    let solver = null;
+    // ==========================================
+    // UI Logic
+    // ==========================================
+
+    let solver;
     let currentGuess = "";
+    let isProcessing = false;
 
-    const ui = {
-        step: document.getElementById('step-indicator'),
-        guess: document.getElementById('guess-display'),
-        status: document.getElementById('status-text'),
-        actionArea: document.getElementById('action-area'),
-        logList: document.getElementById('log-list'),
-        loading: document.getElementById('loading')
-    };
+    // Elements
+    const elGuessOutput = document.getElementById('guess-output');
+    const elStepCount = document.getElementById('step-count');
+    const elCandCount = document.getElementById('candidates-count');
+    const elHistory = document.getElementById('history-list');
+    const elProgressBar = document.getElementById('progress-bar');
+    const elProgressContainer = document.getElementById('progress-container');
+    const elProgressText = document.getElementById('progress-text');
+    const elControls = document.getElementById('game-controls');
+    const elResultMsg = document.getElementById('result-message');
+    const elErrorMsg = document.getElementById('error-message');
+    const btnScores = document.querySelectorAll('.btn-score');
 
-    function startGame() {
+    function initGame() {
         solver = new GameTheorySolver();
-        ui.logList.innerHTML = '';
+        currentGuess = "";
+        isProcessing = false;
+        
+        // Reset UI
+        elStepCount.innerText = "0";
+        elCandCount.innerText = "10000";
+        elHistory.innerHTML = "";
+        elResultMsg.style.display = 'none';
+        elErrorMsg.style.display = 'none';
+        elControls.style.display = 'block';
+        setButtonsDisabled(false);
+        
+        // Start first turn
         nextTurn();
+    }
+
+    function setButtonsDisabled(disabled) {
+        btnScores.forEach(btn => btn.disabled = disabled);
     }
 
     async function nextTurn() {
-        setLoading(true);
-        ui.status.innerText = `剩余可能性: ${solver.candidates.length}`;
+        if (isProcessing) return;
+        isProcessing = true;
+        setButtonsDisabled(true);
+
+        // UI: Thinking state
+        elGuessOutput.innerText = "计算中...";
+        elGuessOutput.classList.add('thinking');
+        elProgressText.innerText = "";
         
-        // 获取建议
-        currentGuess = await solver.getBestGuess();
+        if (solver.candidates.length > 2 && solver.turn >= 2) {
+             elProgressContainer.style.display = 'block';
+        }
+
+        // Small delay to allow UI to render "Thinking"
+        await new Promise(r => setTimeout(r, 50));
+
+        const startTime = performance.now();
+
+        // Get suggestion from solver
+        currentGuess = await solver.getBestGuess((current, total) => {
+            // Update progress bar
+            const pct = Math.floor((current / total) * 100);
+            elProgressBar.style.width = pct + "%";
+            elProgressText.innerText = `正在推演博弈树: ${pct}%`;
+        });
+
+        const endTime = performance.now();
+        const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+
+        // Update UI with result
+        elGuessOutput.classList.remove('thinking');
+        elGuessOutput.innerText = currentGuess;
+        elProgressContainer.style.display = 'none';
+        elProgressText.innerText = `耗时: ${timeTaken}s`;
         
-        ui.step.innerText = `第 ${solver.turn} 轮`;
-        ui.guess.innerText = currentGuess;
-        
-        setLoading(false);
-        showScoreButtons();
+        elStepCount.innerText = solver.turn;
+
+        isProcessing = false;
+        setButtonsDisabled(false);
     }
 
-    function showScoreButtons() {
-        let html = `
-            <div style="grid-column: 1 / -1; margin-bottom: 5px; font-size: 0.9rem;">
-                设定者反馈几对 (位置数值全对)?
-            </div>
-            <div class="controls">
-                <button onclick="handleScore(0)">0</button>
-                <button onclick="handleScore(1)">1</button>
-                <button onclick="handleScore(2)">2</button>
-                <button onclick="handleScore(3)">3</button>
-                <button onclick="handleScore(4)">4</button>
-            </div>
-            <button class="btn-reset" onclick="location.reload()">重置游戏</button>
+    function handleFeedback(score) {
+        if (isProcessing) return;
+
+        // Add to history
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${solver.turn}</td>
+            <td style="font-family:monospace; font-weight:bold">${currentGuess}</td>
+            <td><span style="background:#e2e8f0; padding:2px 6px; border-radius:4px;">${score}</span></td>
+            <td style="text-align:right">${solver.candidates.length}</td>
         `;
-        ui.actionArea.innerHTML = html;
-    }
+        // Insert at top
+        elHistory.insertBefore(row, elHistory.firstChild);
 
-    function handleScore(score) {
         if (score === 4) {
-            gameWin();
+            gameWon();
             return;
         }
 
-        const result = solver.update(currentGuess, score);
-        
-        // 记录日志
-        addLog(solver.turn, currentGuess, score, result.before, result.after);
+        // Update solver
+        const remaining = solver.updateCandidates(currentGuess, score);
+        elCandCount.innerText = remaining;
 
-        if (result.after === 0) {
-            ui.status.innerText = "异常：剩余可能性为0，请检查刚才的反馈输入是否正确。";
-            ui.status.style.color = "red";
-            ui.actionArea.innerHTML = '<button class="btn-reset" onclick="location.reload()">重置</button>';
-            return;
-        }
+        // Update history last cell with new remaining count for better context? 
+        // Actually, the history usually shows remaining *before* the guess or *after*?
+        // Let's update the specific row to show remaining *after* filtering.
+        row.cells[3].innerText = remaining;
 
-        nextTurn();
-    }
-
-    function gameWin() {
-        ui.status.innerText = "破解成功！";
-        ui.status.style.color = "green";
-        ui.actionArea.innerHTML = `
-            <div style="color: green; font-weight: bold; margin-bottom: 20px;">
-                答案是 ${currentGuess}，共耗时 ${solver.turn} 轮。
-            </div>
-            <button class="btn-reset" onclick="startGame()">再来一局</button>
-        `;
-        addLog(solver.turn, currentGuess, 4, 1, 1);
-    }
-
-    function addLog(step, guess, score, before, after) {
-        const div = document.createElement('div');
-        div.className = 'log-entry';
-        div.innerHTML = `
-            <span>#${step} 猜 ${guess}</span>
-            <span>反馈:${score} | 排除:${before-after} | 剩:${after}</span>
-        `;
-        ui.logList.prepend(div);
-    }
-
-    function setLoading(isLoading) {
-        ui.loading.style.display = isLoading ? 'block' : 'none';
-        if (isLoading) {
-            ui.actionArea.style.opacity = '0.5';
-            ui.actionArea.style.pointerEvents = 'none';
+        if (remaining === 0) {
+            gameError();
         } else {
-            ui.actionArea.style.opacity = '1';
-            ui.actionArea.style.pointerEvents = 'auto';
+            nextTurn();
         }
     }
+
+    function gameWon() {
+        elResultMsg.style.display = 'block';
+        elControls.style.display = 'none';
+        elGuessOutput.style.borderColor = 'var(--success)';
+        elGuessOutput.style.color = 'var(--success)';
+    }
+
+    function gameError() {
+        elErrorMsg.style.display = 'block';
+        elControls.style.display = 'none';
+        elGuessOutput.style.borderColor = 'var(--danger)';
+    }
+
+    // Start on load
+    initGame();
+
 </script>
 
 </body>
